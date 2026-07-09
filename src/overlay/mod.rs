@@ -83,18 +83,27 @@ pub struct CaptureSession {
 }
 
 impl CaptureSession {
-    pub fn new(frozen: RgbaImage, monitor_origin: (i32, i32), windows: Vec<crate::capture::PixelRect>) -> Self {
+    pub fn new(
+        frozen: RgbaImage,
+        monitor_origin: (i32, i32),
+        windows: Vec<crate::capture::PixelRect>,
+    ) -> Self {
         let image_size = Vec2::new(frozen.width() as f32, frozen.height() as f32);
         // 窗口屏幕坐标 -> 图像像素坐标，并过滤到本显示器范围。
         let win_rects = windows
             .into_iter()
             .map(|w| {
                 Rect::from_min_size(
-                    Pos2::new((w.x - monitor_origin.0) as f32, (w.y - monitor_origin.1) as f32),
+                    Pos2::new(
+                        (w.x - monitor_origin.0) as f32,
+                        (w.y - monitor_origin.1) as f32,
+                    ),
                     Vec2::new(w.width as f32, w.height as f32),
                 )
             })
-            .filter(|r| r.max.x > 0.0 && r.max.y > 0.0 && r.min.x < image_size.x && r.min.y < image_size.y)
+            .filter(|r| {
+                r.max.x > 0.0 && r.max.y > 0.0 && r.min.x < image_size.x && r.min.y < image_size.y
+            })
             .collect();
 
         Self {
@@ -138,13 +147,15 @@ impl CaptureSession {
 
     fn undo(&mut self) {
         if let Some(prev) = self.undo.pop() {
-            self.redo.push(std::mem::replace(&mut self.annotations, prev));
+            self.redo
+                .push(std::mem::replace(&mut self.annotations, prev));
         }
     }
 
     fn redo(&mut self) {
         if let Some(next) = self.redo.pop() {
-            self.undo.push(std::mem::replace(&mut self.annotations, next));
+            self.undo
+                .push(std::mem::replace(&mut self.annotations, next));
         }
     }
 
@@ -173,8 +184,7 @@ impl CaptureSession {
         let sy = full.height() / self.image_size.y;
         let to_screen = |p: Pos2| Pos2::new(full.min.x + p.x * sx, full.min.y + p.y * sy);
         let to_img = |p: Pos2| Pos2::new((p.x - full.min.x) / sx, (p.y - full.min.y) / sy);
-        let rect_to_screen =
-            |r: Rect| Rect::from_min_max(to_screen(r.min), to_screen(r.max));
+        let rect_to_screen = |r: Rect| Rect::from_min_max(to_screen(r.min), to_screen(r.max));
 
         let painter = ui.painter().clone();
         // 底图。
@@ -200,19 +210,46 @@ impl CaptureSession {
         if let Some(sel) = sel_img {
             let s = rect_to_screen(sel);
             let mask = Color32::from_black_alpha(90);
-            painter.rect_filled(Rect::from_min_max(full.min, Pos2::new(full.max.x, s.min.y)), 0.0, mask);
-            painter.rect_filled(Rect::from_min_max(Pos2::new(full.min.x, s.max.y), full.max), 0.0, mask);
-            painter.rect_filled(Rect::from_min_max(Pos2::new(full.min.x, s.min.y), Pos2::new(s.min.x, s.max.y)), 0.0, mask);
-            painter.rect_filled(Rect::from_min_max(Pos2::new(s.max.x, s.min.y), Pos2::new(full.max.x, s.max.y)), 0.0, mask);
+            painter.rect_filled(
+                Rect::from_min_max(full.min, Pos2::new(full.max.x, s.min.y)),
+                0.0,
+                mask,
+            );
+            painter.rect_filled(
+                Rect::from_min_max(Pos2::new(full.min.x, s.max.y), full.max),
+                0.0,
+                mask,
+            );
+            painter.rect_filled(
+                Rect::from_min_max(Pos2::new(full.min.x, s.min.y), Pos2::new(s.min.x, s.max.y)),
+                0.0,
+                mask,
+            );
+            painter.rect_filled(
+                Rect::from_min_max(Pos2::new(s.max.x, s.min.y), Pos2::new(full.max.x, s.max.y)),
+                0.0,
+                mask,
+            );
             painter.rect_stroke(s, 0.0, Stroke::new(1.5, ACCENT), StrokeKind::Inside);
 
             // 尺寸标签。
-            let label = format!("{} × {}", sel.width().round() as i32, sel.height().round() as i32);
+            let label = format!(
+                "{} × {}",
+                sel.width().round() as i32,
+                sel.height().round() as i32
+            );
             let label_pos = Pos2::new(s.min.x, (s.min.y - 24.0).max(full.min.y + 2.0));
-            let galley = painter.layout_no_wrap(label.clone(), FontId::proportional(13.0), Color32::WHITE);
+            let galley =
+                painter.layout_no_wrap(label.clone(), FontId::proportional(13.0), Color32::WHITE);
             let bg = Rect::from_min_size(label_pos, galley.size() + Vec2::new(10.0, 6.0));
             painter.rect_filled(bg, CornerRadius::same(4), Color32::from_black_alpha(160));
-            painter.text(label_pos + Vec2::new(5.0, 3.0), Align2::LEFT_TOP, label, FontId::proportional(13.0), Color32::WHITE);
+            painter.text(
+                label_pos + Vec2::new(5.0, 3.0),
+                Align2::LEFT_TOP,
+                label,
+                FontId::proportional(13.0),
+                Color32::WHITE,
+            );
         } else {
             painter.rect_filled(full, 0.0, Color32::from_black_alpha(90));
         }
@@ -223,12 +260,13 @@ impl CaptureSession {
         }
 
         // 选区手柄（仅锁定 + Select 工具时）。
-        if self.locked && self.tool == Tool::Select {
-            if let Some(sel) = sel_img {
-                for h in handle_points(rect_to_screen(sel)) {
-                    painter.circle_filled(h, HANDLE_R, Color32::WHITE);
-                    painter.circle_stroke(h, HANDLE_R, Stroke::new(1.5, ACCENT));
-                }
+        if self.locked
+            && self.tool == Tool::Select
+            && let Some(sel) = sel_img
+        {
+            for h in handle_points(rect_to_screen(sel)) {
+                painter.circle_filled(h, HANDLE_R, Color32::WHITE);
+                painter.circle_stroke(h, HANDLE_R, Stroke::new(1.5, ACCENT));
             }
         }
 
@@ -251,21 +289,38 @@ impl CaptureSession {
         if let Some(sel) = sel_img {
             let s = rect_to_screen(sel);
             // 模式按钮（选区右上外侧）。
-            let mode_pos = Pos2::new((s.max.x - 88.0).max(full.min.x + 4.0), (s.min.y - 44.0).max(full.min.y + 2.0));
+            let mode_pos = Pos2::new(
+                (s.max.x - 88.0).max(full.min.x + 4.0),
+                (s.min.y - 44.0).max(full.min.y + 2.0),
+            );
             let area = egui::Area::new(egui::Id::new("mode_btns"))
                 .fixed_pos(mode_pos)
                 .order(egui::Order::Foreground)
                 .show(&ctx, |ui| {
-                    egui::Frame::popup(ui.style()).inner_margin(4.0).show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            if icon_button(ui, Icon::FullScreen, "全屏", self.mode == Mode::FullScreen, 26.0) {
-                                tool_action = Some(ToolbarAction::FullScreen);
-                            }
-                            if icon_button(ui, Icon::Window, "窗口", self.mode == Mode::Window, 26.0) {
-                                tool_action = Some(ToolbarAction::WindowMode);
-                            }
+                    egui::Frame::popup(ui.style())
+                        .inner_margin(4.0)
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                if icon_button(
+                                    ui,
+                                    Icon::FullScreen,
+                                    "全屏",
+                                    self.mode == Mode::FullScreen,
+                                    26.0,
+                                ) {
+                                    tool_action = Some(ToolbarAction::FullScreen);
+                                }
+                                if icon_button(
+                                    ui,
+                                    Icon::Window,
+                                    "窗口",
+                                    self.mode == Mode::Window,
+                                    26.0,
+                                ) {
+                                    tool_action = Some(ToolbarAction::WindowMode);
+                                }
+                            });
                         });
-                    });
                 });
             ui_rects.push(area.response.rect);
 
@@ -295,9 +350,11 @@ impl CaptureSession {
                         .fixed_pos(Pos2::new(tb_pos.x, tb_pos.y + 46.0))
                         .order(egui::Order::Foreground)
                         .show(&ctx, |ui| {
-                            egui::Frame::popup(ui.style()).inner_margin(8.0).show(ui, |ui| {
-                                self.props_contents(ui);
-                            });
+                            egui::Frame::popup(ui.style())
+                                .inner_margin(8.0)
+                                .show(ui, |ui| {
+                                    self.props_contents(ui);
+                                });
                         });
                     ui_rects.push(area.response.rect);
                 }
@@ -338,7 +395,15 @@ impl CaptureSession {
                 }
                 ToolbarAction::SelectTool(t) => {
                     self.tool = t;
-                    self.show_props = matches!(t, Tool::Rect | Tool::Ellipse | Tool::Arrow | Tool::Text | Tool::Number | Tool::Mosaic);
+                    self.show_props = matches!(
+                        t,
+                        Tool::Rect
+                            | Tool::Ellipse
+                            | Tool::Arrow
+                            | Tool::Text
+                            | Tool::Number
+                            | Tool::Mosaic
+                    );
                 }
                 ToolbarAction::ToggleProps => self.show_props = !self.show_props,
                 ToolbarAction::Undo => self.undo(),
@@ -364,7 +429,8 @@ impl CaptureSession {
                 i.key_pressed(egui::Key::Escape),
                 i.key_pressed(egui::Key::Enter),
                 cmd && i.key_pressed(egui::Key::Z) && !i.modifiers.shift,
-                cmd && (i.key_pressed(egui::Key::Y) || (i.modifiers.shift && i.key_pressed(egui::Key::Z))),
+                cmd && (i.key_pressed(egui::Key::Y)
+                    || (i.modifiers.shift && i.key_pressed(egui::Key::Z))),
             )
         });
         if esc {
@@ -376,10 +442,11 @@ impl CaptureSession {
         if redo {
             self.redo();
         }
-        if enter && self.locked {
-            if let Some(img) = self.output(font) {
-                outcome = SessionOutcome::Confirm(img);
-            }
+        if enter
+            && self.locked
+            && let Some(img) = self.output(font)
+        {
+            outcome = SessionOutcome::Confirm(img);
         }
 
         outcome
@@ -405,9 +472,11 @@ impl CaptureSession {
         // 颜色指示按钮，点击开关属性。
         let (rect, resp) = ui.allocate_exact_size(Vec2::splat(30.0), Sense::click());
         if resp.hovered() {
-            ui.painter().rect_filled(rect, CornerRadius::same(6), Color32::from_gray(230));
+            ui.painter()
+                .rect_filled(rect, CornerRadius::same(6), Color32::from_gray(230));
         }
-        ui.painter().circle_filled(rect.center(), 8.0, self.style.color);
+        ui.painter()
+            .circle_filled(rect.center(), 8.0, self.style.color);
         if resp.on_hover_text("样式").clicked() {
             action = Some(ToolbarAction::ToggleProps);
         }
@@ -448,7 +517,12 @@ impl CaptureSession {
                 let (rect, resp) = ui.allocate_exact_size(Vec2::splat(18.0), Sense::click());
                 ui.painter().rect_filled(rect, CornerRadius::same(3), color);
                 if self.style.color == color {
-                    ui.painter().rect_stroke(rect, CornerRadius::same(3), Stroke::new(2.0, ACCENT), StrokeKind::Outside);
+                    ui.painter().rect_stroke(
+                        rect,
+                        CornerRadius::same(3),
+                        Stroke::new(2.0, ACCENT),
+                        StrokeKind::Outside,
+                    );
                 }
                 if resp.clicked() {
                     self.style.color = color;
@@ -458,7 +532,10 @@ impl CaptureSession {
         ui.horizontal(|ui| {
             ui.label("线宽");
             for (label, w) in [("细", 2.0), ("中", 4.0), ("粗", 6.0)] {
-                if ui.selectable_label((self.style.stroke - w).abs() < 0.1, label).clicked() {
+                if ui
+                    .selectable_label((self.style.stroke - w).abs() < 0.1, label)
+                    .clicked()
+                {
                     self.style.stroke = w;
                 }
             }
@@ -467,7 +544,10 @@ impl CaptureSession {
             ui.horizontal(|ui| {
                 ui.label("字号");
                 for (label, sz) in [("小", 14.0), ("中", 20.0), ("大", 28.0)] {
-                    if ui.selectable_label((self.style.font_size - sz).abs() < 0.1, label).clicked() {
+                    if ui
+                        .selectable_label((self.style.font_size - sz).abs() < 0.1, label)
+                        .clicked()
+                    {
                         self.style.font_size = sz;
                     }
                 }
@@ -476,10 +556,16 @@ impl CaptureSession {
         if self.tool == Tool::Arrow {
             ui.horizontal(|ui| {
                 ui.label("箭头");
-                if ui.selectable_label(self.arrow_style == ArrowStyle::Line, "细线").clicked() {
+                if ui
+                    .selectable_label(self.arrow_style == ArrowStyle::Line, "细线")
+                    .clicked()
+                {
                     self.arrow_style = ArrowStyle::Line;
                 }
-                if ui.selectable_label(self.arrow_style == ArrowStyle::Solid, "实心").clicked() {
+                if ui
+                    .selectable_label(self.arrow_style == ArrowStyle::Solid, "实心")
+                    .clicked()
+                {
                     self.arrow_style = ArrowStyle::Solid;
                 }
             });
@@ -503,25 +589,41 @@ impl CaptureSession {
             return;
         }
 
-        if response.drag_started() {
-            if let Some(p) = response.interact_pointer_pos() {
-                let ip = clamp_pos(to_img(p), self.image_size);
-                // 命中手柄 / 选区内部 / 空白。
-                if let Some(sel) = self.selection.filter(|_| self.locked) {
-                    let s_screen = Rect::from_min_max(to_screen(sel.min), to_screen(sel.max));
-                    if let Some(h) = hit_handle(s_screen, p) {
-                        self.sel_drag = Some(SelDrag { mode: DragMode::Resize(h), start_img: ip, orig: sel });
-                    } else if s_screen.contains(p) {
-                        self.sel_drag = Some(SelDrag { mode: DragMode::Move, start_img: ip, orig: sel });
-                    } else {
-                        self.sel_drag = Some(SelDrag { mode: DragMode::Create, start_img: ip, orig: sel });
-                        self.mode = Mode::Custom;
-                    }
+        if response.drag_started()
+            && let Some(p) = response.interact_pointer_pos()
+        {
+            let ip = clamp_pos(to_img(p), self.image_size);
+            // 命中手柄 / 选区内部 / 空白。
+            if let Some(sel) = self.selection.filter(|_| self.locked) {
+                let s_screen = Rect::from_min_max(to_screen(sel.min), to_screen(sel.max));
+                if let Some(h) = hit_handle(s_screen, p) {
+                    self.sel_drag = Some(SelDrag {
+                        mode: DragMode::Resize(h),
+                        start_img: ip,
+                        orig: sel,
+                    });
+                } else if s_screen.contains(p) {
+                    self.sel_drag = Some(SelDrag {
+                        mode: DragMode::Move,
+                        start_img: ip,
+                        orig: sel,
+                    });
                 } else {
-                    self.sel_drag = Some(SelDrag { mode: DragMode::Create, start_img: ip, orig: Rect::NOTHING });
+                    self.sel_drag = Some(SelDrag {
+                        mode: DragMode::Create,
+                        start_img: ip,
+                        orig: sel,
+                    });
                     self.mode = Mode::Custom;
-                    self.locked = true;
                 }
+            } else {
+                self.sel_drag = Some(SelDrag {
+                    mode: DragMode::Create,
+                    start_img: ip,
+                    orig: Rect::NOTHING,
+                });
+                self.mode = Mode::Custom;
+                self.locked = true;
             }
         }
 
@@ -555,17 +657,27 @@ impl CaptureSession {
         match self.tool {
             Tool::Rect | Tool::Ellipse | Tool::Mosaic | Tool::Arrow => {
                 if response.drag_started() {
-                    self.ann_start = response.interact_pointer_pos().map(|p| clamp_pos(to_img(p), self.image_size));
+                    self.ann_start = response
+                        .interact_pointer_pos()
+                        .map(|p| clamp_pos(to_img(p), self.image_size));
                 }
-                if let (Some(start), Some(curp)) = (self.ann_start, response.interact_pointer_pos()) {
+                if let (Some(start), Some(curp)) = (self.ann_start, response.interact_pointer_pos())
+                {
                     let cur = clamp_pos(to_img(curp), self.image_size);
                     let s = to_screen(start);
                     let c = to_screen(cur);
                     match self.tool {
                         Tool::Rect | Tool::Mosaic => {
-                            painter.rect_stroke(Rect::from_two_pos(s, c), 0.0, preview, StrokeKind::Inside);
+                            painter.rect_stroke(
+                                Rect::from_two_pos(s, c),
+                                0.0,
+                                preview,
+                                StrokeKind::Inside,
+                            );
                         }
-                        Tool::Ellipse => draw_ellipse_outline(painter, Rect::from_two_pos(s, c), preview),
+                        Tool::Ellipse => {
+                            draw_ellipse_outline(painter, Rect::from_two_pos(s, c), preview)
+                        }
                         Tool::Arrow => painter.arrow(s, c - s, preview),
                         _ => {}
                     }
@@ -574,10 +686,21 @@ impl CaptureSession {
                         if rect.width() >= 2.0 && rect.height() >= 2.0 {
                             self.snapshot();
                             let a = match self.tool {
-                                Tool::Rect => Annotation::Rect { rect, style: self.style },
-                                Tool::Ellipse => Annotation::Ellipse { rect, style: self.style },
+                                Tool::Rect => Annotation::Rect {
+                                    rect,
+                                    style: self.style,
+                                },
+                                Tool::Ellipse => Annotation::Ellipse {
+                                    rect,
+                                    style: self.style,
+                                },
                                 Tool::Mosaic => Annotation::Mosaic { rect },
-                                Tool::Arrow => Annotation::Arrow { from: start, to: cur, arrow_style: self.arrow_style, style: self.style },
+                                Tool::Arrow => Annotation::Arrow {
+                                    from: start,
+                                    to: cur,
+                                    arrow_style: self.arrow_style,
+                                    style: self.style,
+                                },
                                 _ => unreachable!(),
                             };
                             self.annotations.push(a);
@@ -587,28 +710,38 @@ impl CaptureSession {
                 }
             }
             Tool::Number => {
-                if response.clicked() {
-                    if let Some(p) = response.interact_pointer_pos() {
-                        let pos = clamp_pos(to_img(p), self.image_size);
-                        self.snapshot();
-                        let idx = self.next_number;
-                        self.next_number += 1;
-                        self.annotations.push(Annotation::Number { pos, index: idx, style: self.style });
-                    }
+                if response.clicked()
+                    && let Some(p) = response.interact_pointer_pos()
+                {
+                    let pos = clamp_pos(to_img(p), self.image_size);
+                    self.snapshot();
+                    let idx = self.next_number;
+                    self.next_number += 1;
+                    self.annotations.push(Annotation::Number {
+                        pos,
+                        index: idx,
+                        style: self.style,
+                    });
                 }
             }
             Tool::Text => {
-                if response.clicked() {
-                    if let Some(p) = response.interact_pointer_pos() {
-                        self.pending_text = Some((clamp_pos(to_img(p), self.image_size), String::new()));
-                    }
+                if response.clicked()
+                    && let Some(p) = response.interact_pointer_pos()
+                {
+                    self.pending_text =
+                        Some((clamp_pos(to_img(p), self.image_size), String::new()));
                 }
             }
             Tool::Select => {}
         }
     }
 
-    fn show_pending_text(&mut self, ctx: &egui::Context, to_screen: &dyn Fn(Pos2) -> Pos2, _sx: f32) {
+    fn show_pending_text(
+        &mut self,
+        ctx: &egui::Context,
+        to_screen: &dyn Fn(Pos2) -> Pos2,
+        _sx: f32,
+    ) {
         let Some((pos, mut buf)) = self.pending_text.take() else {
             return;
         };
@@ -619,7 +752,11 @@ impl CaptureSession {
             .fixed_pos(screen_pos)
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                let resp = ui.add(egui::TextEdit::singleline(&mut buf).hint_text("输入文字，回车确认").desired_width(160.0));
+                let resp = ui.add(
+                    egui::TextEdit::singleline(&mut buf)
+                        .hint_text("输入文字，回车确认")
+                        .desired_width(160.0),
+                );
                 resp.request_focus();
                 if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     committed = true;
@@ -631,7 +768,11 @@ impl CaptureSession {
         if committed {
             if !buf.trim().is_empty() {
                 self.snapshot();
-                self.annotations.push(Annotation::Text { pos, content: buf, style: self.style });
+                self.annotations.push(Annotation::Text {
+                    pos,
+                    content: buf,
+                    style: self.style,
+                });
             }
         } else if !cancelled {
             self.pending_text = Some((pos, buf));
@@ -654,11 +795,17 @@ enum ToolbarAction {
 fn icon_button(ui: &mut egui::Ui, icon: Icon, tip: &str, selected: bool, size: f32) -> bool {
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), Sense::click());
     if selected {
-        ui.painter().rect_filled(rect, CornerRadius::same(6), ACCENT);
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(6), ACCENT);
     } else if resp.hovered() {
-        ui.painter().rect_filled(rect, CornerRadius::same(6), Color32::from_gray(232));
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(6), Color32::from_gray(232));
     }
-    let color = if selected { Color32::WHITE } else { Color32::from_gray(70) };
+    let color = if selected {
+        Color32::WHITE
+    } else {
+        Color32::from_gray(70)
+    };
     icons::draw(ui.painter(), icon, rect, color, 1.7);
     resp.on_hover_text(tip).clicked()
 }
@@ -733,17 +880,32 @@ fn draw_ellipse_outline(painter: &egui::Painter, rect: Rect, stroke: Stroke) {
 }
 
 /// 用 egui 画笔实时绘制已提交标注（图像像素 → 屏幕）。
-fn draw_annotation(painter: &egui::Painter, a: &Annotation, to_screen: &dyn Fn(Pos2) -> Pos2, sx: f32) {
+fn draw_annotation(
+    painter: &egui::Painter,
+    a: &Annotation,
+    to_screen: &dyn Fn(Pos2) -> Pos2,
+    sx: f32,
+) {
     match a {
         Annotation::Rect { rect, style } => {
             let s = Rect::from_min_max(to_screen(rect.min), to_screen(rect.max));
-            painter.rect_stroke(s, 0.0, Stroke::new(style.stroke * sx, style.color), StrokeKind::Inside);
+            painter.rect_stroke(
+                s,
+                0.0,
+                Stroke::new(style.stroke * sx, style.color),
+                StrokeKind::Inside,
+            );
         }
         Annotation::Ellipse { rect, style } => {
             let s = Rect::from_min_max(to_screen(rect.min), to_screen(rect.max));
             draw_ellipse_outline(painter, s, Stroke::new(style.stroke * sx, style.color));
         }
-        Annotation::Arrow { from, to, arrow_style, style } => {
+        Annotation::Arrow {
+            from,
+            to,
+            arrow_style,
+            style,
+        } => {
             let s = to_screen(*from);
             let e = to_screen(*to);
             let stroke = Stroke::new(style.stroke * sx, style.color);
@@ -752,19 +914,40 @@ fn draw_annotation(painter: &egui::Painter, a: &Annotation, to_screen: &dyn Fn(P
                 painter.circle_filled(e, style.stroke * sx * 1.2, style.color);
             }
         }
-        Annotation::Text { pos, content, style } => {
-            painter.text(to_screen(*pos), Align2::LEFT_TOP, content, FontId::proportional(style.font_size * sx), style.color);
+        Annotation::Text {
+            pos,
+            content,
+            style,
+        } => {
+            painter.text(
+                to_screen(*pos),
+                Align2::LEFT_TOP,
+                content,
+                FontId::proportional(style.font_size * sx),
+                style.color,
+            );
         }
         Annotation::Number { pos, index, style } => {
             let c = to_screen(*pos);
             let r = style.font_size * sx * 0.85;
             painter.circle_filled(c, r, style.color);
-            painter.text(c, Align2::CENTER_CENTER, index.to_string(), FontId::proportional(style.font_size * sx), Color32::WHITE);
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                index.to_string(),
+                FontId::proportional(style.font_size * sx),
+                Color32::WHITE,
+            );
         }
         Annotation::Mosaic { rect } => {
             let s = Rect::from_min_max(to_screen(rect.min), to_screen(rect.max));
             painter.rect_filled(s, 0.0, Color32::from_gray(128).gamma_multiply(0.7));
-            painter.rect_stroke(s, 0.0, Stroke::new(1.0, Color32::from_gray(180)), StrokeKind::Inside);
+            painter.rect_stroke(
+                s,
+                0.0,
+                Stroke::new(1.0, Color32::from_gray(180)),
+                StrokeKind::Inside,
+            );
         }
     }
 }

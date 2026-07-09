@@ -107,10 +107,10 @@ impl eframe::App for HijessyApp {
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // 全局快捷键：无会话时唤起一次新截图。
-        if let Some(_action) = self.hotkeys.as_ref().and_then(|m| m.poll()) {
-            if self.session.is_none() {
-                self.pending_start = true;
-            }
+        if let Some(_action) = self.hotkeys.as_ref().and_then(|m| m.poll())
+            && self.session.is_none()
+        {
+            self.pending_start = true;
         }
         if self.pending_start && self.session.is_none() {
             self.pending_start = false;

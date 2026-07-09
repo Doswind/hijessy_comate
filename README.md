@@ -113,4 +113,4 @@ src/
 
 ## 许可证
 
-未指定（TODO：如需开源可添加 MIT / Apache-2.0）。
+本项目采用 [MIT 许可证](LICENSE)，© 2026 Doswind。

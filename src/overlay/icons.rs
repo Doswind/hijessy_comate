@@ -44,7 +44,16 @@ pub fn draw(painter: &eframe::egui::Painter, icon: Icon, area: Rect, color: Colo
             poly(
                 painter,
                 r,
-                &[(0.15, 0.05), (0.15, 0.85), (0.38, 0.62), (0.55, 0.98), (0.68, 0.9), (0.5, 0.55), (0.82, 0.5), (0.15, 0.05)],
+                &[
+                    (0.15, 0.05),
+                    (0.15, 0.85),
+                    (0.38, 0.62),
+                    (0.55, 0.98),
+                    (0.68, 0.9),
+                    (0.5, 0.55),
+                    (0.82, 0.5),
+                    (0.15, 0.05),
+                ],
                 s,
             );
         }
@@ -151,6 +160,7 @@ fn circle(painter: &eframe::egui::Painter, r: Rect, cx: f32, cy: f32, rad: f32, 
     painter.circle_stroke(center, radius, s);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn arc(
     painter: &eframe::egui::Painter,
     r: Rect,
@@ -167,7 +177,10 @@ fn arc(
     let mut pts = Vec::with_capacity(steps + 1);
     for i in 0..=steps {
         let t = (start_deg + sweep_deg * i as f32 / steps as f32).to_radians();
-        pts.push(Pos2::new(center.x + radius * t.cos(), center.y + radius * t.sin()));
+        pts.push(Pos2::new(
+            center.x + radius * t.cos(),
+            center.y + radius * t.sin(),
+        ));
     }
     painter.add(Shape::line(pts, s));
 }

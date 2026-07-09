@@ -20,12 +20,25 @@ pub fn compose(base: &RgbaImage, annotations: &[Annotation], font: Option<&FontV
                 arrow_style,
                 style,
             } => draw_arrow(&mut img, *from, *to, *arrow_style, style),
-            Annotation::Text { pos, content, style } => {
+            Annotation::Text {
+                pos,
+                content,
+                style,
+            } => {
                 if let Some(f) = font {
-                    draw_text(&mut img, *pos, content, style.font_size, to_rgba(style.color), f);
+                    draw_text(
+                        &mut img,
+                        *pos,
+                        content,
+                        style.font_size,
+                        to_rgba(style.color),
+                        f,
+                    );
                 }
             }
-            Annotation::Number { pos, index, style } => draw_number(&mut img, *pos, *index, style, font),
+            Annotation::Number { pos, index, style } => {
+                draw_number(&mut img, *pos, *index, style, font)
+            }
             Annotation::Mosaic { rect } => draw_mosaic(&mut img, *rect),
         }
     }
@@ -160,8 +173,8 @@ fn fill_triangle(img: &mut RgbaImage, a: Pos2, b: Pos2, c: Pos2, color: Rgba<u8>
             let w0 = edge(b, c, p);
             let w1 = edge(c, a, p);
             let w2 = edge(a, b, p);
-            let inside = (w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0)
-                || (w0 <= 0.0 && w1 <= 0.0 && w2 <= 0.0);
+            let inside =
+                (w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0) || (w0 <= 0.0 && w1 <= 0.0 && w2 <= 0.0);
             if inside {
                 blend(img, x, y, color, 1.0);
             }
@@ -200,17 +213,11 @@ fn draw_mosaic(img: &mut RgbaImage, rect: Rect) {
                     cnt += 1;
                 }
             }
-            if cnt > 0 {
-                let avg = Rgba([
-                    (sr / cnt) as u8,
-                    (sg / cnt) as u8,
-                    (sb / cnt) as u8,
-                    255,
-                ]);
-                for yy in by..by1 {
-                    for xx in bx..bx1 {
-                        img.put_pixel(xx, yy, avg);
-                    }
+            // 块内至少有一个像素（bx<bx1 且 by<by1），cnt 恒 >= 1。
+            let avg = Rgba([(sr / cnt) as u8, (sg / cnt) as u8, (sb / cnt) as u8, 255]);
+            for yy in by..by1 {
+                for xx in bx..bx1 {
+                    img.put_pixel(xx, yy, avg);
                 }
             }
             bx += block;
@@ -260,6 +267,13 @@ fn draw_number(img: &mut RgbaImage, pos: Pos2, index: u32, style: &Style, font: 
         let text_w: f32 = s.chars().map(|c| scaled.h_advance(f.glyph_id(c))).sum();
         let tx = pos.x - text_w / 2.0;
         let ty = pos.y - style.font_size / 2.0;
-        draw_text(img, Pos2::new(tx, ty), &s, style.font_size, Rgba([255, 255, 255, 255]), f);
+        draw_text(
+            img,
+            Pos2::new(tx, ty),
+            &s,
+            style.font_size,
+            Rgba([255, 255, 255, 255]),
+            f,
+        );
     }
 }

@@ -2,6 +2,9 @@
 name = "hijessy"
 version = "0.1.0"
 edition = "2024"
+description = "跨平台轻量截图工具（Rust + egui）：窗口/框选截图、标注、剪贴板与保存"
+license = "MIT"
+repository = "https://github.com/Doswind/hijessy_comate"
 
 [dependencies]
 ab_glyph = "0.2.32"

@@ -114,7 +114,9 @@ fn capture_full_screen(id: Option<u32>) -> anyhow::Result<Frame> {
 
     let monitor = match chosen {
         Some(m) => m,
-        None => monitors.first().ok_or_else(|| anyhow::anyhow!("未找到显示器"))?,
+        None => monitors
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("未找到显示器"))?,
     };
 
     let image = monitor.capture_image()?;

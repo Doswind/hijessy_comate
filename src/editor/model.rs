@@ -31,10 +31,31 @@ impl Default for Style {
 /// 单个标注。
 #[derive(Clone, Debug)]
 pub enum Annotation {
-    Rect { rect: Rect, style: Style },
-    Ellipse { rect: Rect, style: Style },
-    Arrow { from: Pos2, to: Pos2, arrow_style: ArrowStyle, style: Style },
-    Text { pos: Pos2, content: String, style: Style },
-    Number { pos: Pos2, index: u32, style: Style },
-    Mosaic { rect: Rect },
+    Rect {
+        rect: Rect,
+        style: Style,
+    },
+    Ellipse {
+        rect: Rect,
+        style: Style,
+    },
+    Arrow {
+        from: Pos2,
+        to: Pos2,
+        arrow_style: ArrowStyle,
+        style: Style,
+    },
+    Text {
+        pos: Pos2,
+        content: String,
+        style: Style,
+    },
+    Number {
+        pos: Pos2,
+        index: u32,
+        style: Style,
+    },
+    Mosaic {
+        rect: Rect,
+    },
 }

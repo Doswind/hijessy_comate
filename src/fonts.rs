@@ -66,16 +66,13 @@ fn candidates() -> Vec<(&'static str, u32)> {
 #[cfg(all(unix, not(target_os = "macos")))]
 fn candidates() -> Vec<(&'static str, u32)> {
     vec![
-        (
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            0,
-        ),
+        ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0),
         ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 0),
         ("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 0),
-        ("/usr/share/fonts/wenquanyi/wqy-microhei/wqy-microhei.ttc", 0),
         (
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/wenquanyi/wqy-microhei/wqy-microhei.ttc",
             0,
         ),
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 0),
     ]
 }

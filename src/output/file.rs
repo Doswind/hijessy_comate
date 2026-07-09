@@ -25,10 +25,10 @@ impl OutputSink for FileSink {
 
 /// 保存图像到指定路径，按扩展名推断格式。JPEG 会丢弃透明通道。
 pub fn save_image(img: &RgbaImage, path: &Path) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)?;
     }
 
     let ext = path
