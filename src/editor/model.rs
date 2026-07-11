@@ -31,6 +31,15 @@ impl Default for Style {
 /// 单个标注。
 #[derive(Clone, Debug)]
 pub enum Annotation {
+    Line {
+        from: Pos2,
+        to: Pos2,
+        style: Style,
+    },
+    Pencil {
+        points: Vec<Pos2>,
+        style: Style,
+    },
     Rect {
         rect: Rect,
         style: Style,

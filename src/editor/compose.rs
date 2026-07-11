@@ -12,6 +12,20 @@ pub fn compose(base: &RgbaImage, annotations: &[Annotation], font: Option<&FontV
     let mut img = base.clone();
     for a in annotations {
         match a {
+            Annotation::Line { from, to, style } => {
+                thick_line(&mut img, *from, *to, style.stroke, to_rgba(style.color));
+            }
+            Annotation::Pencil { points, style } => {
+                for segment in points.windows(2) {
+                    thick_line(
+                        &mut img,
+                        segment[0],
+                        segment[1],
+                        style.stroke,
+                        to_rgba(style.color),
+                    );
+                }
+            }
             Annotation::Rect { rect, style } => draw_rect(&mut img, *rect, style),
             Annotation::Ellipse { rect, style } => draw_ellipse(&mut img, *rect, style),
             Annotation::Arrow {
@@ -275,5 +289,39 @@ fn draw_number(img: &mut RgbaImage, pos: Pos2, index: u32, style: &Style, font: 
             Rgba([255, 255, 255, 255]),
             f,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compose_line_and_pencil_change_pixels() {
+        let base = RgbaImage::from_pixel(20, 20, Rgba([255, 255, 255, 255]));
+        let style = Style {
+            color: Color32::RED,
+            stroke: 1.0,
+            font_size: 16.0,
+        };
+        let annotations = [
+            Annotation::Line {
+                from: Pos2::new(1.0, 1.0),
+                to: Pos2::new(10.0, 1.0),
+                style,
+            },
+            Annotation::Pencil {
+                points: vec![Pos2::new(2.0, 5.0), Pos2::new(8.0, 8.0)],
+                style,
+            },
+        ];
+
+        let output = compose(&base, &annotations, None);
+        let changed = output
+            .pixels()
+            .zip(base.pixels())
+            .filter(|(actual, original)| actual != original)
+            .count();
+        assert!(changed >= 10);
     }
 }

@@ -30,7 +30,9 @@ pub enum Tool {
     Select,
     Rect,
     Ellipse,
+    Line,
     Arrow,
+    Pencil,
     Text,
     Number,
     Mosaic,
@@ -79,6 +81,7 @@ pub struct CaptureSession {
     undo: Vec<Vec<Annotation>>,
     redo: Vec<Vec<Annotation>>,
     ann_start: Option<Pos2>,
+    pencil_points: Vec<Pos2>,
     pending_text: Option<(Pos2, String)>,
     next_number: u32,
     show_props: bool,
@@ -128,6 +131,7 @@ impl CaptureSession {
             undo: Vec::new(),
             redo: Vec::new(),
             ann_start: None,
+            pencil_points: Vec::new(),
             pending_text: None,
             next_number: 1,
             show_props: false,
@@ -139,6 +143,7 @@ impl CaptureSession {
     }
 
     fn window_at(&self, p: Pos2) -> Option<Rect> {
+        // xcap 0.9.6 在三平台均按前到后返回窗口，首个命中即最前窗口。
         self.win_rects.iter().find(|r| r.contains(p)).copied()
     }
 
@@ -411,7 +416,6 @@ impl CaptureSession {
                 }
                 ToolbarAction::ToggleProps => self.show_props = !self.show_props,
                 ToolbarAction::Undo => self.undo(),
-                ToolbarAction::Redo => self.redo(),
                 ToolbarAction::Save => {
                     if let Some(img) = self.output(font) {
                         outcome = SessionOutcome::Save(img);
@@ -462,10 +466,12 @@ impl CaptureSession {
             (Icon::Cursor, "选择/调整", Tool::Select),
             (Icon::Rect, "矩形", Tool::Rect),
             (Icon::Ellipse, "椭圆", Tool::Ellipse),
+            (Icon::Line, "直线", Tool::Line),
             (Icon::Arrow, "箭头", Tool::Arrow),
-            (Icon::Text, "文字", Tool::Text),
-            (Icon::Number, "序号", Tool::Number),
+            (Icon::Pencil, "铅笔", Tool::Pencil),
             (Icon::Mosaic, "马赛克", Tool::Mosaic),
+            (Icon::Text, "文本", Tool::Text),
+            (Icon::Number, "编号", Tool::Number),
         ];
         for (icon, tip, tool) in tools {
             if icon_button(ui, icon, tip, self.tool == tool, 30.0) {
@@ -488,9 +494,19 @@ impl CaptureSession {
         if icon_button(ui, Icon::Undo, "撤销", false, 30.0) {
             action = Some(ToolbarAction::Undo);
         }
-        if icon_button(ui, Icon::Redo, "重做", false, 30.0) {
-            action = Some(ToolbarAction::Redo);
+        if icon_button(ui, Icon::Cancel, "取消", false, 30.0) {
+            action = Some(ToolbarAction::Cancel);
         }
+        if icon_button(ui, Icon::Save, "保存到文件", false, 30.0) {
+            action = Some(ToolbarAction::Save);
+        }
+        if icon_button(ui, Icon::Confirm, "确认并复制", false, 30.0) {
+            action = Some(ToolbarAction::Confirm);
+        }
+        ui.separator();
+        disabled_icon_button(ui, Icon::Ocr, "OCR（即将支持）", 30.0);
+        disabled_icon_button(ui, Icon::Record, "录屏（即将支持）", 30.0);
+        disabled_icon_button(ui, Icon::LongCapture, "长截图（即将支持）", 30.0);
         ui.separator();
         if icon_button(ui, Icon::Save, "保存到文件", false, 30.0) {
             action = Some(ToolbarAction::Save);
@@ -658,85 +674,130 @@ impl CaptureSession {
         sx: f32,
     ) {
         let preview = Stroke::new(self.style.stroke * sx, self.style.color);
-        match self.tool {
-            Tool::Rect | Tool::Ellipse | Tool::Mosaic | Tool::Arrow => {
-                if response.drag_started() {
-                    self.ann_start = response
-                        .interact_pointer_pos()
-                        .map(|p| clamp_pos(to_img(p), self.image_size));
-                }
-                if let (Some(start), Some(curp)) = (self.ann_start, response.interact_pointer_pos())
-                {
-                    let cur = clamp_pos(to_img(curp), self.image_size);
-                    let s = to_screen(start);
-                    let c = to_screen(cur);
-                    match self.tool {
-                        Tool::Rect | Tool::Mosaic => {
-                            painter.rect_stroke(
-                                Rect::from_two_pos(s, c),
-                                0.0,
-                                preview,
-                                StrokeKind::Inside,
-                            );
-                        }
-                        Tool::Ellipse => {
-                            draw_ellipse_outline(painter, Rect::from_two_pos(s, c), preview)
-                        }
-                        Tool::Arrow => painter.arrow(s, c - s, preview),
-                        _ => {}
-                    }
-                    if response.drag_stopped() {
-                        let rect = Rect::from_two_pos(start, cur);
-                        if rect.width() >= 2.0 && rect.height() >= 2.0 {
-                            self.snapshot();
-                            let a = match self.tool {
-                                Tool::Rect => Annotation::Rect {
-                                    rect,
-                                    style: self.style,
-                                },
-                                Tool::Ellipse => Annotation::Ellipse {
-                                    rect,
-                                    style: self.style,
-                                },
-                                Tool::Mosaic => Annotation::Mosaic { rect },
-                                Tool::Arrow => Annotation::Arrow {
-                                    from: start,
-                                    to: cur,
-                                    arrow_style: self.arrow_style,
-                                    style: self.style,
-                                },
-                                _ => unreachable!(),
-                            };
-                            self.annotations.push(a);
-                        }
-                        self.ann_start = None;
-                    }
-                }
-            }
-            Tool::Number => {
-                if response.clicked()
-                    && let Some(p) = response.interact_pointer_pos()
-                {
-                    let pos = clamp_pos(to_img(p), self.image_size);
+
+        if response.clicked()
+            && let Some(p) = response.interact_pointer_pos()
+        {
+            let point = clamp_pos(to_img(p), self.image_size);
+            match self.tool {
+                Tool::Text => self.pending_text = Some((point, String::new())),
+                Tool::Number => {
                     self.snapshot();
-                    let idx = self.next_number;
-                    self.next_number += 1;
                     self.annotations.push(Annotation::Number {
-                        pos,
-                        index: idx,
+                        pos: point,
+                        index: self.next_number,
                         style: self.style,
                     });
+                    self.next_number += 1;
+                }
+                _ => {}
+            }
+        }
+
+        if response.drag_started()
+            && let Some(p) = response.interact_pointer_pos()
+        {
+            let point = clamp_pos(to_img(p), self.image_size);
+            match self.tool {
+                Tool::Rect | Tool::Ellipse | Tool::Line | Tool::Arrow | Tool::Mosaic => {
+                    self.ann_start = Some(point);
+                }
+                Tool::Pencil => {
+                    self.snapshot();
+                    self.pencil_points.clear();
+                    self.pencil_points.push(point);
+                }
+                _ => {}
+            }
+        }
+
+        if self.tool == Tool::Pencil
+            && response.dragged()
+            && let Some(p) = response.interact_pointer_pos()
+        {
+            let point = clamp_pos(to_img(p), self.image_size);
+            if self
+                .pencil_points
+                .last()
+                .is_none_or(|last| (*last).distance(point) >= 1.5)
+            {
+                self.pencil_points.push(point);
+            }
+        }
+
+        if let (Some(start), Some(p)) = (self.ann_start, response.interact_pointer_pos()) {
+            let cur = clamp_pos(to_img(p), self.image_size);
+            let rect = Rect::from_two_pos(to_screen(start), to_screen(cur));
+            match self.tool {
+                Tool::Rect | Tool::Mosaic => {
+                    painter.rect_stroke(rect, 0.0, preview, StrokeKind::Outside);
+                }
+                Tool::Ellipse => {
+                    painter.circle_stroke(
+                        rect.center(),
+                        rect.width().min(rect.height()) / 2.0,
+                        preview,
+                    );
+                }
+                Tool::Line | Tool::Arrow => {
+                    painter.line_segment([to_screen(start), to_screen(cur)], preview);
+                }
+                _ => {}
+            }
+        }
+        if self.tool == Tool::Pencil && self.pencil_points.len() > 1 {
+            painter.add(Shape::line(
+                self.pencil_points.iter().copied().map(to_screen).collect(),
+                preview,
+            ));
+        }
+
+        if response.drag_stopped() {
+            if self.tool == Tool::Pencil {
+                if self.pencil_points.len() > 1 {
+                    self.annotations.push(Annotation::Pencil {
+                        points: std::mem::take(&mut self.pencil_points),
+                        style: self.style,
+                    });
+                } else {
+                    self.pencil_points.clear();
+                    self.undo.pop();
+                }
+                return;
+            }
+
+            if let (Some(start), Some(p)) = (self.ann_start, response.interact_pointer_pos()) {
+                let cur = clamp_pos(to_img(p), self.image_size);
+                let rect = Rect::from_two_pos(start, cur);
+                if rect.width() > 1.0 || rect.height() > 1.0 {
+                    self.snapshot();
+                    let annotation = match self.tool {
+                        Tool::Rect => Annotation::Rect {
+                            rect,
+                            style: self.style,
+                        },
+                        Tool::Ellipse => Annotation::Ellipse {
+                            rect,
+                            style: self.style,
+                        },
+                        Tool::Line => Annotation::Line {
+                            from: start,
+                            to: cur,
+                            style: self.style,
+                        },
+                        Tool::Mosaic => Annotation::Mosaic { rect },
+                        Tool::Arrow => Annotation::Arrow {
+                            from: start,
+                            to: cur,
+                            arrow_style: self.arrow_style,
+                            style: self.style,
+                        },
+                        _ => unreachable!(),
+                    };
+                    self.annotations.push(annotation);
                 }
             }
-            Tool::Text => {
-                if response.clicked()
-                    && let Some(p) = response.interact_pointer_pos()
-                {
-                    self.pending_text =
-                        Some((clamp_pos(to_img(p), self.image_size), String::new()));
-                }
-            }
-            Tool::Select => {}
+            self.ann_start = None;
         }
     }
 
@@ -790,10 +851,15 @@ enum ToolbarAction {
     SelectTool(Tool),
     ToggleProps,
     Undo,
-    Redo,
     Save,
     Confirm,
     Cancel,
+}
+
+fn disabled_icon_button(ui: &mut egui::Ui, icon: Icon, tip: &str, size: f32) {
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
+    icons::draw(ui.painter(), icon, rect, Color32::from_gray(155), 1.5);
+    response.on_hover_text(tip);
 }
 
 fn icon_button(ui: &mut egui::Ui, icon: Icon, tip: &str, selected: bool, size: f32) -> bool {
@@ -891,6 +957,18 @@ fn draw_annotation(
     sx: f32,
 ) {
     match a {
+        Annotation::Line { from, to, style } => {
+            painter.line_segment(
+                [to_screen(*from), to_screen(*to)],
+                Stroke::new(style.stroke * sx, style.color),
+            );
+        }
+        Annotation::Pencil { points, style } => {
+            painter.add(Shape::line(
+                points.iter().copied().map(to_screen).collect(),
+                Stroke::new(style.stroke * sx, style.color),
+            ));
+        }
         Annotation::Rect { rect, style } => {
             let s = Rect::from_min_max(to_screen(rect.min), to_screen(rect.max));
             painter.rect_stroke(

@@ -8,6 +8,7 @@ mod fonts;
 mod hotkey;
 mod output;
 mod overlay;
+mod settings;
 mod tray;
 
 use eframe::egui;

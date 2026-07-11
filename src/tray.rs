@@ -5,23 +5,28 @@ use tray_icon::{
 
 pub enum TrayAction {
     Capture,
+    Settings,
     Exit,
 }
 
 pub struct TrayIconManager {
     _icon: TrayIcon,
     capture_id: MenuId,
+    settings_id: MenuId,
     exit_id: MenuId,
 }
 
 impl TrayIconManager {
     pub fn new() -> anyhow::Result<Self> {
         let capture = MenuItem::new("截图", true, None);
-        let settings = MenuItem::new("设置（即将支持）", false, None);
+        let settings = MenuItem::new("设置", true, None);
+        let recording = MenuItem::new("录屏（即将支持）", false, None);
+        let ocr = MenuItem::new("OCR 识别（即将支持）", false, None);
         let exit = MenuItem::new("退出", true, None);
         let capture_id = capture.id().clone();
+        let settings_id = settings.id().clone();
         let exit_id = exit.id().clone();
-        let menu = Menu::with_items(&[&capture, &settings, &exit])?;
+        let menu = Menu::with_items(&[&capture, &settings, &recording, &ocr, &exit])?;
 
         let icon = Icon::from_rgba(icon_rgba(), 16, 16)?;
         let tray = TrayIconBuilder::new()
@@ -33,6 +38,7 @@ impl TrayIconManager {
         Ok(Self {
             _icon: tray,
             capture_id,
+            settings_id,
             exit_id,
         })
     }
@@ -41,6 +47,9 @@ impl TrayIconManager {
         while let Ok(event) = MenuEvent::receiver().try_recv() {
             if event.id == self.capture_id {
                 return Some(TrayAction::Capture);
+            }
+            if event.id == self.settings_id {
+                return Some(TrayAction::Settings);
             }
             if event.id == self.exit_id {
                 return Some(TrayAction::Exit);

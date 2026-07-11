@@ -10,6 +10,7 @@ use crate::hotkey::HotkeyManager;
 use crate::output::file::timestamped_filename;
 use crate::output::{Artifact, ClipboardSink, FileSink, OutputSink};
 use crate::overlay::{CaptureSession, SessionOutcome};
+use crate::settings::{SettingsAction, SettingsPanel};
 use crate::tray::{TrayAction, TrayIconManager};
 
 pub struct HijessyApp {
@@ -17,6 +18,7 @@ pub struct HijessyApp {
     config: Config,
     hotkeys: Option<HotkeyManager>,
     tray: Option<TrayIconManager>,
+    settings: Option<SettingsPanel>,
     font: Option<LoadedFont>,
     session: Option<CaptureSession>,
     /// 待开启新会话标记。
@@ -45,10 +47,11 @@ impl HijessyApp {
             config,
             hotkeys,
             tray: TrayIconManager::new().ok(),
+            settings: None,
             font,
             session: None,
             // 启动即开始一次截图。
-            pending_start: true,
+            pending_start: false,
         }
     }
 
@@ -92,6 +95,31 @@ impl HijessyApp {
         self.session = None;
     }
 
+    fn open_settings(&mut self, ctx: &egui::Context) {
+        self.settings = Some(SettingsPanel::new(&self.config));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::MousePassthrough(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Transparent(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
+            egui::WindowLevel::Normal,
+        ));
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(520.0, 420.0)));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Resizable(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title("Hijessy — 设置".to_owned()));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+    }
+
+    fn close_settings(&mut self, ctx: &egui::Context) {
+        self.settings = None;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Transparent(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title("Hijessy".to_owned()));
+        ctx.send_viewport_cmd(egui::ViewportCommand::MousePassthrough(true));
+    }
+
     fn copy_to_clipboard(&self, img: &RgbaImage) {
         let _ = ClipboardSink::new().write(&Artifact::Image(img));
     }
@@ -123,14 +151,18 @@ impl eframe::App for HijessyApp {
             self.pending_start = true;
         }
         match self.tray.as_ref().and_then(TrayIconManager::poll) {
-            Some(TrayAction::Capture) if self.session.is_none() => self.pending_start = true,
+            Some(TrayAction::Capture) if self.session.is_none() && self.settings.is_none() => {
+                self.pending_start = true;
+            }
+            Some(TrayAction::Settings) if self.session.is_none() => self.open_settings(ctx),
+            Some(TrayAction::Capture | TrayAction::Settings) => {}
             Some(TrayAction::Exit) => {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 return;
             }
             _ => {}
         }
-        if self.pending_start && self.session.is_none() {
+        if self.pending_start && self.session.is_none() && self.settings.is_none() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             self.pending_start = false;
             self.start_session(ctx);
@@ -140,8 +172,31 @@ impl eframe::App for HijessyApp {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        if let Some(settings) = &mut self.settings {
+            match settings.show(ui) {
+                SettingsAction::Save(config) => match HotkeyManager::new(&config.hotkeys) {
+                    Ok(hotkeys) => {
+                        if let Err(error) = config.save() {
+                            settings.set_error(format!("保存配置失败：{error}"));
+                        } else {
+                            self.hotkeys = Some(hotkeys);
+                            self.config = config;
+                            self.close_settings(&ctx);
+                        }
+                    }
+                    Err(error) => settings.set_error(format!("快捷键无效或已被占用：{error}")),
+                },
+                SettingsAction::Close => self.close_settings(&ctx),
+                SettingsAction::None => {}
+            }
+            return;
+        }
+
+        let Some(session) = &mut self.session else {
+            return;
+        };
         let font = self.font.as_ref().map(|f| &f.font);
-        let outcome = self.session.as_mut().unwrap().show(ui, font);
+        let outcome = session.show(ui, font);
         match outcome {
             SessionOutcome::Pending => {}
             SessionOutcome::Cancel => self.end_session(&ctx),

@@ -6,17 +6,21 @@ pub enum Icon {
     Cursor,
     Rect,
     Ellipse,
+    Line,
     Arrow,
+    Pencil,
     Text,
     Number,
     Mosaic,
     Undo,
-    Redo,
     Save,
     Confirm,
     Cancel,
     FullScreen,
     Window,
+    Ocr,
+    Record,
+    LongCapture,
 }
 
 fn at(r: Rect, fx: f32, fy: f32) -> Pos2 {
@@ -68,10 +72,19 @@ pub fn draw(painter: &eframe::egui::Painter, icon: Icon, area: Rect, color: Colo
         Icon::Ellipse => {
             circle(painter, r, 0.5, 0.5, 0.42, s);
         }
+        Icon::Line => {
+            line(painter, r, (0.20, 0.80), (0.80, 0.20), s);
+        }
         Icon::Arrow => {
-            line(painter, r, (0.12, 0.88), (0.88, 0.12), s);
-            line(painter, r, (0.88, 0.12), (0.55, 0.12), s);
-            line(painter, r, (0.88, 0.12), (0.88, 0.45), s);
+            line(painter, r, (0.18, 0.78), (0.78, 0.22), s);
+            line(painter, r, (0.50, 0.22), (0.78, 0.22), s);
+            line(painter, r, (0.78, 0.22), (0.78, 0.50), s);
+        }
+        Icon::Pencil => {
+            line(painter, r, (0.25, 0.72), (0.68, 0.29), s);
+            line(painter, r, (0.33, 0.80), (0.76, 0.37), s);
+            line(painter, r, (0.25, 0.72), (0.33, 0.80), s);
+            line(painter, r, (0.68, 0.29), (0.76, 0.37), s);
         }
         Icon::Text => {
             line(painter, r, (0.18, 0.15), (0.82, 0.15), s);
@@ -113,11 +126,6 @@ pub fn draw(painter: &eframe::egui::Painter, icon: Icon, area: Rect, color: Colo
             line(painter, r, (0.2, 0.32), (0.16, 0.6), s);
             line(painter, r, (0.2, 0.32), (0.44, 0.34), s);
         }
-        Icon::Redo => {
-            arc(painter, r, 0.5, 0.55, 0.34, -120.0, 140.0, s);
-            line(painter, r, (0.8, 0.32), (0.84, 0.6), s);
-            line(painter, r, (0.8, 0.32), (0.56, 0.34), s);
-        }
         Icon::Save => {
             line(painter, r, (0.5, 0.1), (0.5, 0.68), s);
             line(painter, r, (0.5, 0.68), (0.3, 0.46), s);
@@ -144,12 +152,39 @@ pub fn draw(painter: &eframe::egui::Painter, icon: Icon, area: Rect, color: Colo
         }
         Icon::Window => {
             painter.rect_stroke(
-                Rect::from_min_max(at(r, 0.08, 0.12), at(r, 0.92, 0.88)),
-                eframe::egui::CornerRadius::same(2),
+                r.shrink(r.width() * 0.20),
+                1.0,
                 s,
                 eframe::egui::StrokeKind::Inside,
             );
-            line(painter, r, (0.08, 0.3), (0.92, 0.3), s);
+            line(painter, r, (0.22, 0.35), (0.78, 0.35), s);
+        }
+        Icon::Ocr => {
+            painter.rect_stroke(
+                r.shrink(r.width() * 0.16),
+                2.0,
+                s,
+                eframe::egui::StrokeKind::Inside,
+            );
+            painter.text(
+                r.center(),
+                eframe::egui::Align2::CENTER_CENTER,
+                "OCR",
+                eframe::egui::FontId::proportional(r.width() * 0.22),
+                color,
+            );
+        }
+        Icon::Record => {
+            let red = Color32::from_rgb(225, 48, 48);
+            painter.circle_stroke(r.center(), r.width() * 0.34, Stroke::new(2.0, red));
+            painter.circle_filled(r.center(), r.width() * 0.18, red);
+        }
+        Icon::LongCapture => {
+            let inner = r.shrink(r.width() * 0.28);
+            painter.rect_stroke(inner, 1.0, s, eframe::egui::StrokeKind::Inside);
+            line(painter, r, (0.50, 0.12), (0.50, 0.82), s);
+            line(painter, r, (0.34, 0.66), (0.50, 0.82), s);
+            line(painter, r, (0.66, 0.66), (0.50, 0.82), s);
         }
     }
 }
