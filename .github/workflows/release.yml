@@ -10,21 +10,22 @@ env:
 
 jobs:
   release:
-    name: Build & Package (${{ matrix.os }})
+    name: Build & Package (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - name: macOS ARM
+            os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: Hijessy-macos-arm64.zip
-          - os: macos-13
+          - name: macOS Intel
+            os: macos-13
             target: x86_64-apple-darwin
             artifact_name: Hijessy-macos-x64.zip
-          - os: ubuntu-latest
-            artifact_name: Hijessy-linux-x64.tar.gz
-          - os: windows-latest
+          - name: Windows x64
+            os: windows-latest
             artifact_name: Hijessy-windows-x64.zip
 
     steps:
@@ -37,16 +38,6 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxkbcommon-dev libwayland-dev \
-            libpipewire-0.3-dev libdbus-1-dev libclang-dev \
-            libegl1-mesa-dev libgl-dev
 
       # ── macOS ───────────────────────────────────────────────────────────────
 
@@ -94,20 +85,6 @@ jobs:
           PLIST
           zip -r "${{ matrix.artifact_name }}" "$APP"
 
-      # ── Linux ───────────────────────────────────────────────────────────────
-
-      - name: Build (Linux)
-        if: runner.os == 'Linux'
-        run: cargo build --release
-
-      - name: Package Linux tar.gz
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p hijessy-linux
-          cp target/release/hijessy hijessy-linux/
-          cp README.md hijessy-linux/
-          tar -czf "${{ matrix.artifact_name }}" hijessy-linux/
-
       # ── Windows ─────────────────────────────────────────────────────────────
 
       - name: Build (Windows)
@@ -119,9 +96,9 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path hijessy-windows -Force
-          Copy-Item target\release\hijessy.exe hijessy-windows\
+          Copy-Item target\release\hijessy.exe hijessy-windows\Hijessy.exe
           Copy-Item README.md hijessy-windows\
-          Compress-Archive -Path hijessy-windows -DestinationPath "${{ matrix.artifact_name }}"
+          Compress-Archive -Path hijessy-windows\* -DestinationPath "${{ matrix.artifact_name }}"
 
       # ── Upload ──────────────────────────────────────────────────────────────
 
@@ -147,16 +124,18 @@ jobs:
         with:
           name: Hijessy ${{ github.ref_name }}
           body: |
-            ## 安装
+            ## 下载安装
 
-            - **macOS (Apple Silicon)**: 下载 `Hijessy-macos-arm64.zip`，解压后将 `Hijessy.app` 拖入 `Applications`
-            - **macOS (Intel)**: 下载 `Hijessy-macos-x64.zip`，同上
-            - **Linux**: 下载 `Hijessy-linux-x64.tar.gz`，解压后运行 `./hijessy`
-            - **Windows**: 下载 `Hijessy-windows-x64.zip`，解压后运行 `hijessy.exe`
+            | 平台 | 文件 | 说明 |
+            |------|------|------|
+            | macOS (Apple Silicon) | `Hijessy-macos-arm64.zip` | M1/M2/M3 Mac，解压后将 `Hijessy.app` 拖入 `Applications` |
+            | macOS (Intel) | `Hijessy-macos-x64.zip` | Intel Mac，同上 |
+            | Windows | `Hijessy-windows-x64.zip` | 解压后双击 `Hijessy.exe` 运行 |
 
             **macOS 首次运行**：需在「系统设置 → 隐私与安全性 → 屏幕录制」中授权 Hijessy。
+
+            **Windows**：如果 SmartScreen 弹出警告，点击「仍要运行」即可，因为程序暂未签名。
           files: |
             Hijessy-macos-arm64.zip
             Hijessy-macos-x64.zip
-            Hijessy-linux-x64.tar.gz
             Hijessy-windows-x64.zip
