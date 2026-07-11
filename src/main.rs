@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod app;
 mod capture;
@@ -8,6 +8,7 @@ mod fonts;
 mod hotkey;
 mod output;
 mod overlay;
+mod tray;
 
 use eframe::egui;
 
@@ -16,7 +17,7 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_title("Hijessy")
             .with_decorations(false)
-            .with_fullscreen(true)
+            .with_visible(false)
             .with_transparent(true)
             .with_mouse_passthrough(true)
             .with_always_on_top(),

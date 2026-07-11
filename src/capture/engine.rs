@@ -77,9 +77,13 @@ pub fn list_windows() -> anyhow::Result<Vec<WindowInfo>> {
         if width == 0 || height == 0 {
             continue;
         }
+        let title = w.title().unwrap_or_default();
+        if title.eq_ignore_ascii_case("Hijessy") {
+            continue;
+        }
         out.push(WindowInfo {
             id: w.id()?,
-            title: w.title().unwrap_or_default(),
+            title,
             rect: PixelRect::new(w.x()?, w.y()?, width, height),
         });
     }

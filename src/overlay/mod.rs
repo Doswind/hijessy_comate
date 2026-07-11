@@ -62,8 +62,10 @@ pub struct CaptureSession {
     frozen: RgbaImage,
     frozen_tex: Option<TextureHandle>,
     image_size: Vec2,
-    /// 窗口矩形（图像像素坐标）。
+    /// 窗口矩形（图像像素坐标，保持系统枚举顺序）。
     win_rects: Vec<Rect>,
+    /// 浮层尚未收到指针事件时使用的启动鼠标位置。
+    initial_cursor: Option<Pos2>,
     mode: Mode,
     locked: bool,
     /// 选区（图像像素坐标）。
@@ -87,30 +89,34 @@ impl CaptureSession {
         frozen: RgbaImage,
         monitor_origin: (i32, i32),
         windows: Vec<crate::capture::PixelRect>,
+        cursor_screen: Option<(i32, i32)>,
     ) -> Self {
         let image_size = Vec2::new(frozen.width() as f32, frozen.height() as f32);
-        // 窗口屏幕坐标 -> 图像像素坐标，并过滤到本显示器范围。
+        let image_rect = Rect::from_min_size(Pos2::ZERO, image_size);
+        // 窗口屏幕坐标 -> 图像像素坐标，并裁剪到本显示器范围。
         let win_rects = windows
             .into_iter()
-            .map(|w| {
-                Rect::from_min_size(
+            .filter_map(|w| {
+                let rect = Rect::from_min_size(
                     Pos2::new(
                         (w.x - monitor_origin.0) as f32,
                         (w.y - monitor_origin.1) as f32,
                     ),
                     Vec2::new(w.width as f32, w.height as f32),
-                )
-            })
-            .filter(|r| {
-                r.max.x > 0.0 && r.max.y > 0.0 && r.min.x < image_size.x && r.min.y < image_size.y
+                );
+                let clipped = rect.intersect(image_rect);
+                (clipped.width() > 0.0 && clipped.height() > 0.0).then_some(clipped)
             })
             .collect();
+        let initial_cursor = cursor_screen
+            .map(|(x, y)| Pos2::new((x - monitor_origin.0) as f32, (y - monitor_origin.1) as f32));
 
         Self {
             frozen,
             frozen_tex: None,
             image_size,
             win_rects,
+            initial_cursor,
             mode: Mode::Window,
             locked: false,
             selection: None,
@@ -133,11 +139,7 @@ impl CaptureSession {
     }
 
     fn window_at(&self, p: Pos2) -> Option<Rect> {
-        self.win_rects
-            .iter()
-            .filter(|r| r.contains(p))
-            .min_by(|a, b| (a.area()).partial_cmp(&b.area()).unwrap())
-            .copied()
+        self.win_rects.iter().find(|r| r.contains(p)).copied()
     }
 
     fn snapshot(&mut self) {
@@ -197,9 +199,11 @@ impl CaptureSession {
             );
         }
 
-        let cursor_img = ctx.pointer_hover_pos().map(to_img);
+        let cursor_img = ctx.pointer_hover_pos().map(to_img).or(self.initial_cursor);
+        if ctx.pointer_hover_pos().is_some() {
+            self.initial_cursor = None;
+        }
 
-        // 当前选区（图像像素）。
         let sel_img = match self.mode {
             Mode::FullScreen => Some(self.full_img_rect()),
             Mode::Window if !self.locked => cursor_img.and_then(|c| self.window_at(c)),

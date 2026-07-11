@@ -30,7 +30,8 @@ jobs:
           sudo apt-get install -y \
             libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxkbcommon-dev libwayland-dev \
-            libpipewire-0.3-dev libdbus-1-dev libclang-dev
+            libpipewire-0.3-dev libdbus-1-dev libclang-dev \
+            libegl1-mesa-dev libgl-dev
 
       - name: Rustfmt (check)
         run: cargo fmt --all --check
@@ -62,7 +63,8 @@ jobs:
           sudo apt-get install -y \
             libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxkbcommon-dev libwayland-dev \
-            libpipewire-0.3-dev libdbus-1-dev libclang-dev
+            libpipewire-0.3-dev libdbus-1-dev libclang-dev \
+            libegl1-mesa-dev libgl-dev
 
       - name: Build (release)
         run: cargo build --release --verbose

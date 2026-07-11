@@ -14,9 +14,11 @@ eframe = "0.35.0"
 egui = "0.35.0"
 global-hotkey = "0.8.0"
 image = "0.25.10"
+mouse_position = "0.1.4"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
 toml = "1.1.2"
+tray-icon = "0.21.3"
 xcap = { version = "0.9.6", features = ["image"] }
 
 # 体积/内存优化：优先最小体积

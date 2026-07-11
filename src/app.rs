@@ -10,11 +10,13 @@ use crate::hotkey::HotkeyManager;
 use crate::output::file::timestamped_filename;
 use crate::output::{Artifact, ClipboardSink, FileSink, OutputSink};
 use crate::overlay::{CaptureSession, SessionOutcome};
+use crate::tray::{TrayAction, TrayIconManager};
 
 pub struct HijessyApp {
     engine: XcapEngine,
     config: Config,
     hotkeys: Option<HotkeyManager>,
+    tray: Option<TrayIconManager>,
     font: Option<LoadedFont>,
     session: Option<CaptureSession>,
     /// 待开启新会话标记。
@@ -42,6 +44,7 @@ impl HijessyApp {
             engine: XcapEngine::new(),
             config,
             hotkeys,
+            tray: TrayIconManager::new().ok(),
             font,
             session: None,
             // 启动即开始一次截图。
@@ -59,14 +62,19 @@ impl HijessyApp {
                     .into_iter()
                     .map(|w| w.rect)
                     .collect();
-                self.session = Some(CaptureSession::new(frame.image, origin, windows));
+                let cursor = match mouse_position::mouse_position::Mouse::get_mouse_position() {
+                    mouse_position::mouse_position::Mouse::Position { x, y } => Some((x, y)),
+                    mouse_position::mouse_position::Mouse::Error => None,
+                };
+                self.session = Some(CaptureSession::new(frame.image, origin, windows, cursor));
 
                 // 关闭鼠标穿透、置顶聚焦，进入截图交互。
+                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
                 ctx.send_viewport_cmd(egui::ViewportCommand::MousePassthrough(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
                     egui::WindowLevel::AlwaysOnTop,
                 ));
-                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             }
             Err(_) => {
@@ -78,8 +86,10 @@ impl HijessyApp {
 
     /// 结束会话：回到空闲（全屏透明 + 鼠标穿透，界面不可见且不拦截操作）。
     fn end_session(&mut self, ctx: &egui::Context) {
-        self.session = None;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
         ctx.send_viewport_cmd(egui::ViewportCommand::MousePassthrough(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
+        self.session = None;
     }
 
     fn copy_to_clipboard(&self, img: &RgbaImage) {
@@ -106,13 +116,22 @@ impl eframe::App for HijessyApp {
     }
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // 全局快捷键：无会话时唤起一次新截图。
+        // 全局快捷键和托盘都只在空闲时启动新截图。
         if let Some(_action) = self.hotkeys.as_ref().and_then(|m| m.poll())
             && self.session.is_none()
         {
             self.pending_start = true;
         }
+        match self.tray.as_ref().and_then(TrayIconManager::poll) {
+            Some(TrayAction::Capture) if self.session.is_none() => self.pending_start = true,
+            Some(TrayAction::Exit) => {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                return;
+            }
+            _ => {}
+        }
         if self.pending_start && self.session.is_none() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             self.pending_start = false;
             self.start_session(ctx);
         }
@@ -120,9 +139,6 @@ impl eframe::App for HijessyApp {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        if self.session.is_none() {
-            return;
-        }
         let ctx = ui.ctx().clone();
         let font = self.font.as_ref().map(|f| &f.font);
         let outcome = self.session.as_mut().unwrap().show(ui, font);
